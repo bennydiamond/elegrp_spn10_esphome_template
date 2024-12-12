@@ -1,0 +1,398 @@
+substitutions:
+  log_level: "INFO"
+  indicator_brightness_when_offline_percent: '100'
+  multiclick_min_length: "40ms" # Should be above 30ms
+  multiclick_max_length: "350ms"
+  longpress_min_length: "1000ms"
+  # Relay state on boot in case value cannot be restored from flash. 
+  # You should set to false if not needed as the device will momentarily de-energize the relay on reboots (hardware limitation)
+  # If set to true
+  default_relay_on_boot_is_active: "false" 
+
+#packages:
+#  remote_package_files:
+#    url: https://github.com/bennydiamond/elegrp_spn10_esphome_template
+#    files: [.base.elegrp.spn10_template.yaml]  # optional; if not specified, all files will be included
+#    ref: master  # optional
+#    refresh: 1d  # optional
+
+esphome:
+  name: ${device_name}
+  friendly_name: ${device_friendly_name}
+  on_boot: 
+    then:
+      - light.control:
+          id: led_light
+          brightness: !lambda return id(indication_brightness).state / 100;
+      - if:
+          condition:
+            lambda: return id(relay_on_boot_state) == true;
+          then:
+            - delay: 1s
+            - switch.turn_on: output_relay
+          else:
+            - switch.turn_off: output_relay 
+
+bk72xx:
+  board: cb2s
+
+globals:
+  - id: relay_local_control_active
+    type: bool
+    restore_value: Yes
+    initial_value: "true"
+  - id: relay_local_control_fallback_active
+    type: bool
+    restore_value: Yes
+    initial_value: "true"
+  - id: relay_on_boot_state
+    type: bool
+    restore_value: Yes
+    initial_value: ${default_relay_on_boot_is_active}
+
+# Enable logging
+logger:
+  level: ${log_level}
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: ${api_key}
+  reboot_timeout: 0s # Never reboot on api disconnected
+  # If device disconnected from API for 10 minutes, turn off the indicator LEDs.
+  on_client_disconnected:
+    if:
+      condition:
+        for:
+          time: 10min
+          condition:
+            not:
+              api.connected:
+      then:
+        - light.control:
+            id: led_light
+            brightness: "${indicator_brightness_when_offline_percent}%"
+
+ota:
+  - platform: esphome
+    password: ${ota_password}
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  # Enable fallback hotspot (captive portal) in case wifi connection fails
+  ap:
+    ssid: ${hotspot_name}
+    password: ${hotspot_password}
+
+captive_portal:
+    
+web_server:
+  port: 80
+  version: 3
+
+sensor:
+  - platform: wifi_signal
+    name: "WiFi RSSI"
+    update_interval: 60s
+    entity_category: diagnostic
+    web_server:
+      sorting_weight: 202
+
+text_sensor:
+  - platform: wifi_info
+    ssid:
+      name: "WiFi SSID"
+      entity_category: diagnostic
+      web_server:
+        sorting_weight: 201
+    ip_address:
+      name: "IP Address"
+      entity_category: diagnostic
+      web_server:
+        sorting_weight: 203
+    mac_address:
+      name: "MAC Address"
+      entity_category: diagnostic
+      web_server:
+        sorting_weight: 204
+  - platform: template
+    name: "Wifi Channel"
+    entity_category: diagnostic
+    web_server:
+        sorting_weight: 205
+    lambda: |-
+      std::string out;
+      char buffer[10];
+      snprintf(buffer, 10, "%u", WiFi.channel());
+      out.append(buffer);
+      return out;
+    update_interval: 60s
+
+button:
+  - platform: restart
+    name: "Device Restart"
+    web_server:
+        sorting_weight: 199
+
+binary_sensor:
+  - platform: gpio
+    name: "Button Up"
+    id: button_up
+    pin: 
+      number: P6
+      mode:
+        input: True
+        pullup: True
+      inverted: True
+    filters:
+      delayed_on_off: 30ms
+    internal: True
+    on_multi_click: 
+      - timing: 
+          - ON for ${multiclick_min_length} to ${multiclick_max_length}
+          - OFF for at least ${multiclick_max_length}
+        then:
+          - if:
+              condition:
+                or:
+                  # If local control is enabled
+                  - lambda: return id(relay_local_control_active) == true;
+                  # Or if fallback control is enabled and API or WIFI are not connected
+                  - and:
+                      - lambda: return id(relay_local_control_fallback_active) == true;
+                      - or:
+                          - not:
+                              - api.connected:
+                          - not:
+                              - wifi.connected:
+              then:
+                - switch.turn_on: output_relay
+          - event.trigger:
+              id: button_up_events
+              event_type: singleclick
+      - timing:
+          - ON for ${multiclick_min_length} to ${multiclick_max_length}
+          - OFF for ${multiclick_min_length} to ${multiclick_max_length}
+          - ON for ${multiclick_min_length} to ${multiclick_max_length}
+          - OFF for at least ${multiclick_max_length}
+        then:
+          - event.trigger:
+              id: button_up_events
+              event_type: doubleclick
+      - timing: 
+          - ON for at least ${longpress_min_length}
+        then:
+          - event.trigger:
+              id: button_up_events
+              event_type: longpress
+
+  - platform: gpio
+    name: "Button Down"
+    id: button_down
+    pin: 
+      number: P23
+      mode:
+        input: True
+        pullup: True
+      inverted: True
+    filters:
+      delayed_on_off: 30ms
+    internal: True
+    on_multi_click: 
+      - timing: 
+          - ON for ${multiclick_min_length} to ${multiclick_max_length}
+          - OFF for at least ${multiclick_max_length}
+        then:
+          - if:
+              condition:
+                or:
+                  # If local control is enabled
+                  - lambda: return id(relay_local_control_active) == true;
+                  # Or if fallback control is enabled and API or WIFI are not connected
+                  - and:
+                      - lambda: return id(relay_local_control_fallback_active) == true;
+                      - or:
+                          - not:
+                              - api.connected:
+                          - not:
+                              - wifi.connected:
+              then:
+                - switch.turn_off: output_relay
+          - event.trigger:
+              id: button_down_events
+              event_type: singleclick
+      - timing:
+          - ON for ${multiclick_min_length} to ${multiclick_max_length}
+          - OFF for ${multiclick_min_length} to ${multiclick_max_length}
+          - ON for ${multiclick_min_length} to ${multiclick_max_length}
+          - OFF for at least ${multiclick_max_length}
+        then:
+          - event.trigger:
+              id: button_down_events
+              event_type: doubleclick
+      - timing: 
+          - ON for at least ${longpress_min_length}
+        then:
+          - event.trigger:
+              id: button_down_events
+              event_type: longpress
+
+
+event:
+  - platform: template
+    name: "Button Up Events"
+    id: button_up_events
+    web_server:
+        sorting_weight: 1
+    device_class: button
+    event_types:
+      - singleclick
+      - doubleclick
+      - longpress
+  - platform: template
+    name: "Button Down Events"
+    id: button_down_events
+    web_server:
+        sorting_weight: 2
+    device_class: button
+    event_types:
+      - singleclick
+      - doubleclick
+      - longpress
+
+switch:
+  - platform: gpio
+    name: "Relay"
+    id: output_relay
+    web_server:
+        sorting_weight: -1
+    pin:
+      number: P7
+      inverted: False
+    # Rebooting the switch de-energize the relay invariably
+    restore_mode: DISABLED # Handled by global variable on boot
+    on_turn_on: 
+      then:
+        - light.turn_off: led_light
+    on_turn_off: 
+      then:
+        - if:
+            condition:
+              - number.in_range:
+                    id: indication_brightness
+                    above: 1.0
+            then:
+              - light.turn_on: led_light
+  # Toggle relay control physically on the switch
+  # Useful if you want to use the device as a scene controller
+  - platform: template
+    name: "Relay local control"
+    id: relay_local_control_toggle
+    web_server:
+        sorting_weight: 101
+    entity_category: config
+    disabled_by_default: True
+    restore_mode: RESTORE_DEFAULT_ON 
+    lambda: "return id(relay_local_control_active) == true;"
+    turn_on_action:
+      - globals.set: 
+          id: relay_local_control_active
+          value: "true"
+    turn_off_action:
+      - globals.set: 
+          id: relay_local_control_active
+          value: "false"
+  # Toggle fallback of local relay control if API or WIFI is disconnected
+  - platform: template
+    name: "Relay control fallback"
+    id: relay_local_control_fallback_toggle
+    web_server:
+        sorting_weight: 102
+    entity_category: config
+    disabled_by_default: True
+    restore_mode: RESTORE_DEFAULT_ON 
+    lambda: "return id(relay_local_control_fallback_active) == true;"
+    turn_on_action:
+      - globals.set: 
+          id: relay_local_control_fallback_active
+          value: "true"
+    turn_off_action:
+      - globals.set: 
+          id: relay_local_control_fallback_active
+          value: "false"
+  - platform: template
+    name: "Relay state on boot"
+    id: relay_state_on_boot_toggle
+    web_server:
+        sorting_weight: 103
+    entity_category: config
+    disabled_by_default: True
+    restore_mode: DISABLED
+    lambda: "return id(relay_on_boot_state) == true;"
+    turn_on_action:
+      - globals.set: 
+          id: relay_on_boot_state
+          value: "true"
+    turn_off_action:
+      - globals.set: 
+          id: relay_on_boot_state
+          value: "false"
+
+output:
+  # White LED
+  - platform: libretiny_pwm
+    id: led_pwm_output
+    pin:
+      number: P24
+      inverted: True
+    frequency: 1000 Hz
+    min_power: 0.01
+    zero_means_zero: True
+
+light:
+  # White LED
+  - platform: monochromatic
+    id: led_light
+    output: led_pwm_output
+    default_transition_length: 0s
+    restore_mode: ALWAYS_ON
+    internal: true
+        
+number:
+  # Templated brightness slider to configure white LED's brightness without toggling it ON or OFF
+  - platform: template
+    name: "Indicator Brightness"
+    id: indication_brightness
+    web_server:
+        sorting_weight: 100
+    entity_category: config
+    min_value: 0
+    max_value: 100
+    step: 1
+    optimistic: True
+    # To preserve flash, it's not restored on boot.
+    initial_value: ${indicator_brightness_when_offline_percent}
+    on_value: 
+      then:
+        # Change brightness value
+        - light.control:
+            id: led_light
+            brightness: !lambda return x/100;
+        # If relay is OFF and brightness value is above 0%, turn ON LED.
+        # If not, turn OFF LED.
+        - if:
+            condition:
+              and:
+                - switch.is_off: output_relay
+                - number.in_range:
+                    id: indication_brightness
+                    above: 0.01
+            then:
+              - light.control:
+                  id: led_light
+                  state: ON
+            else: 
+              - light.control:
+                  id: led_light
+                  state: OFF
