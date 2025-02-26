@@ -49,6 +49,7 @@ logger:
 
 # Enable Home Assistant API
 api:
+  id: id_esphome_api
   encryption:
     key: ${api_key}
   reboot_timeout: 0s # Never reboot on api disconnected
@@ -68,6 +69,7 @@ api:
 
 ota:
   - platform: esphome
+    id: id_esphome_ota
     password: ${ota_password}
 
 wifi:
