@@ -8,6 +8,7 @@ There is no power monitoring capability.
 Notable functionnality of this pacakage available:
 - Relay control with paddle up and paddle down switches. Paddle Up turns ON the relay.
 - Single-click, Double-click and long press events for both paddle buttons.
+- Very long press triggers device reboot(paddle down) or reboot into safe mode(paddle up).
 - White status LED follows relay output status, inverted. LED is ON when relay is OFF.
 - White status LED brightness control. Brightness value can be modified without turning ON the LED.
 - If disconnected from API for 10 minutes straight, reset White LED indicator to a preset value
@@ -15,6 +16,11 @@ Notable functionnality of this pacakage available:
 - Ability to enable local relay control fallback (switch paddles controls relay) on connectivity issues with Home Assistant
 - Ability to configure relay state on boot without reprogramming
 
+This is a leaner variant over the main template with a few components removed or modified:
+- Removed API encryption
+- Removed OTA password
+- Removed Web Server
+- Removed fallback Hotspot and captive portal
 
 
 # Initial device programming

@@ -4,6 +4,7 @@ substitutions:
   multiclick_min_length: "40ms" # Should be above 30ms
   multiclick_max_length: "350ms"
   longpress_min_length: "1000ms"
+  longpress_reboot_length: "30s"
   # Relay state on boot in case value cannot be restored from flash. 
   # You should set to false if not needed as the device will momentarily de-energize the relay on reboots (hardware limitation)
   # If set to true
@@ -50,9 +51,6 @@ logger:
 # Enable Home Assistant API
 api:
   id: id_esphome_api
-  encryption:
-    key: ${api_key}
-  reboot_timeout: 0s # Never reboot on api disconnected
   # If device disconnected from API for 10 minutes, turn off the indicator LEDs.
   on_client_disconnected:
     if:
@@ -70,55 +68,32 @@ api:
 ota:
   - platform: esphome
     id: id_esphome_ota
-    password: ${ota_password}
 
 wifi:
   id: id_esphome_wifi
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-  # Enable fallback hotspot (captive portal) in case wifi connection fails
-  ap:
-    ssid: ${hotspot_name}
-    password: ${hotspot_password}
-
-captive_portal:
-  id: id_captive_portal
-    
-web_server:
-  port: 80
-  version: 3
-  id: id_web_server
 
 sensor:
   - platform: wifi_signal
     name: "WiFi RSSI"
     update_interval: 60s
     entity_category: diagnostic
-    web_server:
-      sorting_weight: 202
 
 text_sensor:
   - platform: wifi_info
     ssid:
       name: "WiFi SSID"
       entity_category: diagnostic
-      web_server:
-        sorting_weight: 201
     ip_address:
       name: "IP Address"
       entity_category: diagnostic
-      web_server:
-        sorting_weight: 203
     mac_address:
       name: "MAC Address"
       entity_category: diagnostic
-      web_server:
-        sorting_weight: 204
   - platform: template
     name: "Wifi Channel"
     entity_category: diagnostic
-    web_server:
-        sorting_weight: 205
     lambda: |-
       std::string out;
       char buffer[10];
@@ -129,9 +104,11 @@ text_sensor:
 
 button:
   - platform: restart
+    id: id_device_restart
     name: "Device Restart"
-    web_server:
-        sorting_weight: 199
+  - platform: safe_mode
+    id: id_device_restart_safe_mode
+    name: "Device Restart (Safe Mode)"
 
 binary_sensor:
   - platform: gpio
@@ -184,6 +161,11 @@ binary_sensor:
           - event.trigger:
               id: button_up_events
               event_type: longpress
+      - timing: 
+          - ON for at least ${longpress_reboot_length}
+        then:
+          - button.press:
+              id: id_device_restart_safe_mode
 
   - platform: gpio
     name: "Button Down"
@@ -235,14 +217,17 @@ binary_sensor:
           - event.trigger:
               id: button_down_events
               event_type: longpress
+      - timing: 
+          - ON for at least ${longpress_reboot_length}
+        then:
+          - button.press:
+              id: id_device_restart
 
 
 event:
   - platform: template
     name: "Button Up Events"
     id: button_up_events
-    web_server:
-        sorting_weight: 1
     device_class: button
     event_types:
       - singleclick
@@ -251,8 +236,6 @@ event:
   - platform: template
     name: "Button Down Events"
     id: button_down_events
-    web_server:
-        sorting_weight: 2
     device_class: button
     event_types:
       - singleclick
@@ -263,8 +246,6 @@ switch:
   - platform: gpio
     name: "Relay"
     id: output_relay
-    web_server:
-        sorting_weight: -1
     pin:
       number: P7
       inverted: False
@@ -287,8 +268,6 @@ switch:
   - platform: template
     name: "Relay local control"
     id: relay_local_control_toggle
-    web_server:
-        sorting_weight: 101
     entity_category: config
     disabled_by_default: True
     restore_mode: RESTORE_DEFAULT_ON 
@@ -305,8 +284,6 @@ switch:
   - platform: template
     name: "Relay control fallback"
     id: relay_local_control_fallback_toggle
-    web_server:
-        sorting_weight: 102
     entity_category: config
     disabled_by_default: True
     restore_mode: RESTORE_DEFAULT_ON 
@@ -322,8 +299,6 @@ switch:
   - platform: template
     name: "Relay state on boot"
     id: relay_state_on_boot_toggle
-    web_server:
-        sorting_weight: 103
     entity_category: config
     disabled_by_default: True
     restore_mode: DISABLED
@@ -362,8 +337,6 @@ number:
   - platform: template
     name: "Indicator Brightness"
     id: indication_brightness
-    web_server:
-        sorting_weight: 100
     entity_category: config
     min_value: 0
     max_value: 100
