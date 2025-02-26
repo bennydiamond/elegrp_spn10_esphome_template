@@ -73,6 +73,8 @@ wifi:
   id: id_esphome_wifi
   ssid: !secret wifi_ssid
   password: !secret wifi_password
+  # Power save on LibreTiny is boolean so HIGH or LIGHT have the same effect
+  power_save_mode: HIGH
 
 sensor:
   - platform: wifi_signal
