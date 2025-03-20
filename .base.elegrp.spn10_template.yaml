@@ -9,6 +9,8 @@ substitutions:
   # You should set to false if not needed as the device will momentarily de-energize the relay on reboots (hardware limitation)
   # If set to true
   default_relay_on_boot_is_active: "false" 
+  api_disconnect_reboot_timeout: "15min"
+  wifi_disconnect_reboot_timeout: "15min"
 
 esphome:
   name: ${device_name}
@@ -50,6 +52,7 @@ logger:
 
 # Enable Home Assistant API
 api:
+  reboot_timeout: ${api_disconnect_reboot_timeout}
   id: id_esphome_api
   # If device disconnected from API for 10 minutes, turn off the indicator LEDs.
   on_client_disconnected:
@@ -75,6 +78,7 @@ wifi:
   password: !secret wifi_password
   # Power save on LibreTiny is boolean so HIGH or LIGHT have the same effect
   power_save_mode: HIGH
+  reboot_timeout: ${wifi_disconnect_reboot_timeout}
 
 sensor:
   - platform: wifi_signal
