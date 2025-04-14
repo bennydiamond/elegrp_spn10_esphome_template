@@ -152,24 +152,27 @@ binary_sensor:
                               - wifi.connected:
               then:
                 - switch.turn_on: output_relay
-          - event.trigger:
-              id: button_up_events
-              event_type: singleclick
+          - homeassistant.event:
+              event: esphome.button_pressed
+              data:
+                message: up_singleclick
       - timing:
           - ON for ${multiclick_min_length} to ${multiclick_max_length}
           - OFF for ${multiclick_min_length} to ${multiclick_max_length}
           - ON for ${multiclick_min_length} to ${multiclick_max_length}
           - OFF for at least ${multiclick_max_length}
         then:
-          - event.trigger:
-              id: button_up_events
-              event_type: doubleclick
+          - homeassistant.event:
+              event: esphome.button_pressed
+              data:
+                message: up_doubleclick
       - timing: 
           - ON for at least ${longpress_min_length}
         then:
-          - event.trigger:
-              id: button_up_events
-              event_type: longpress
+          - homeassistant.event:
+              event: esphome.button_pressed
+              data:
+                message: up_longpress
       - timing: 
           - ON for at least ${longpress_reboot_length}
         then:
@@ -208,48 +211,32 @@ binary_sensor:
                               - wifi.connected:
               then:
                 - switch.turn_off: output_relay
-          - event.trigger:
-              id: button_down_events
-              event_type: singleclick
+          - homeassistant.event:
+              event: esphome.button_pressed
+              data:
+                message: down_singleclick
       - timing:
           - ON for ${multiclick_min_length} to ${multiclick_max_length}
           - OFF for ${multiclick_min_length} to ${multiclick_max_length}
           - ON for ${multiclick_min_length} to ${multiclick_max_length}
           - OFF for at least ${multiclick_max_length}
         then:
-          - event.trigger:
-              id: button_down_events
-              event_type: doubleclick
+          - homeassistant.event:
+              event: esphome.button_pressed
+              data:
+                message: down_doubleclick
       - timing: 
           - ON for at least ${longpress_min_length}
         then:
-          - event.trigger:
-              id: button_down_events
-              event_type: longpress
+          - homeassistant.event:
+              event: esphome.button_pressed
+              data:
+                message: down_longpress
       - timing: 
           - ON for at least ${longpress_reboot_length}
         then:
           - button.press:
               id: id_device_restart
-
-
-event:
-  - platform: template
-    name: "Button Up Events"
-    id: button_up_events
-    device_class: button
-    event_types:
-      - singleclick
-      - doubleclick
-      - longpress
-  - platform: template
-    name: "Button Down Events"
-    id: button_down_events
-    device_class: button
-    event_types:
-      - singleclick
-      - doubleclick
-      - longpress
 
 switch:
   - platform: gpio
