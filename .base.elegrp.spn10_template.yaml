@@ -18,6 +18,9 @@ esphome:
   project:
     name: elegrp.spn10_template
     version: "1.1"
+  platformio_options:
+    build_flags:
+      - -DLWIP_DHCP_DOES_ACD_CHECK=0 # fix for https://github.com/libretiny-eu/libretiny/issues/316
   on_boot: 
     then:
       - light.control:
