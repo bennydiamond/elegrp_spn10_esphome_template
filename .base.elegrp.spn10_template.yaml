@@ -4,7 +4,7 @@ substitutions:
   multiclick_min_length: "40ms" # Should be above 30ms
   multiclick_max_length: "350ms"
   longpress_min_length: "1000ms"
-  longpress_reboot_length: "30s"
+  longpress_reboot_length: "10s"
   # Relay state on boot in case value cannot be restored from flash. 
   # You should set to false if not needed as the device will momentarily de-energize the relay on reboots (hardware limitation)
   # If set to true
@@ -17,7 +17,7 @@ esphome:
   friendly_name: ${device_friendly_name}
   project:
     name: elegrp.spn10_template
-    version: "1.1"
+    version: "1.2mqtt"
   platformio_options:
     build_flags:
       - -DLWIP_DHCP_DOES_ACD_CHECK=0 # fix for https://github.com/libretiny-eu/libretiny/issues/316
@@ -25,7 +25,7 @@ esphome:
     then:
       - light.control:
           id: led_light
-          brightness: !lambda return id(indication_brightness).state / 100;
+          brightness: !lambda return id(indicator_brightness).state / 100;
       - if:
           condition:
             lambda: return id(relay_on_boot_state) == true;
@@ -37,6 +37,54 @@ esphome:
 
 bk72xx:
   board: cb2s
+  framework: 
+    version: 1.8.0
+
+mqtt:
+  id: id_mqtt_broker
+  broker: 192.168.0.250
+  port: 1883
+  username: esphome
+  password: esphome
+  topic_prefix: "esphome/${device_name}"
+  discovery_unique_id_generator: mac
+  on_disconnect:
+    if:
+      condition:
+        for:
+          time: 10min
+          condition:
+            not:
+              mqtt.connected:
+      then:
+        - number.set:
+            id: indicator_brightness
+            value: ${indicator_brightness_when_offline_percent}
+
+ota:
+  - platform: esphome
+    id: id_esphome_ota
+
+captive_portal:
+  id: id_captive_portal
+
+web_server:
+  id: id_web_server
+  include_internal: True
+  
+mdns:
+  id: id_mdns
+  disabled: True
+  
+debug:
+  id: id_debug
+  update_interval: 30s
+
+# Enable logging
+logger:
+  id: id_logger
+  level: ${log_level}
+  baud_rate: 0 # Disable log to uart because its unreachable anyway
 
 globals:
   - id: relay_local_control_active
@@ -52,67 +100,31 @@ globals:
     restore_value: Yes
     initial_value: ${default_relay_on_boot_is_active}
 
-# Enable logging
-logger:
-  level: ${log_level}
-
-# Enable Home Assistant API
-api:
-  reboot_timeout: ${api_disconnect_reboot_timeout}
-  id: id_esphome_api
-  # If device disconnected from API for 10 minutes, turn off the indicator LEDs.
-  on_client_disconnected:
-    if:
-      condition:
-        for:
-          time: 10min
-          condition:
-            not:
-              api.connected:
-      then:
-        - light.control:
-            id: led_light
-            brightness: "${indicator_brightness_when_offline_percent}%"
-
-ota:
-  - platform: esphome
-    id: id_esphome_ota
-
-wifi:
-  id: id_esphome_wifi
-  ssid: !secret wifi_ssid
-  password: !secret wifi_password
-  # Power save on LibreTiny is boolean so HIGH or LIGHT have the same effect
-  power_save_mode: HIGH
-  reboot_timeout: ${wifi_disconnect_reboot_timeout}
-
 sensor:
   - platform: wifi_signal
     name: "WiFi RSSI"
     update_interval: 60s
     entity_category: diagnostic
-
-text_sensor:
-  - platform: wifi_info
-    ssid:
-      name: "WiFi SSID"
-      entity_category: diagnostic
-    ip_address:
-      name: "IP Address"
-      entity_category: diagnostic
-    mac_address:
-      name: "MAC Address"
-      entity_category: diagnostic
-  - platform: template
-    name: "Wifi Channel"
+  - platform: internal_temperature
+    name: "CPU Temperature"
+    id: id_sensor_internal_temperature
     entity_category: diagnostic
-    lambda: |-
-      std::string out;
-      char buffer[10];
-      snprintf(buffer, 10, "%u", WiFi.channel());
-      out.append(buffer);
-      return out;
-    update_interval: 60s
+  - platform: uptime
+    type: seconds
+    name: Uptime
+  - platform: debug
+    free:
+      name: "Heap Free"
+    loop_time:
+      name: "Loop Time"
+  - platform: mqtt_subscribe
+    name: "HA desired indicator brightness value"
+    topic: ${indicator_brightness_topic}
+    on_value: 
+      then:
+        - number.set:
+            id: indicator_brightness
+            value: !lambda "return x;"
 
 button:
   - platform: restart
@@ -145,37 +157,34 @@ binary_sensor:
                 or:
                   # If local control is enabled
                   - lambda: return id(relay_local_control_active) == true;
-                  # Or if fallback control is enabled and API or WIFI are not connected
+                  # Or if fallback control is enabled and MQTT or WIFI are not connected
                   - and:
                       - lambda: return id(relay_local_control_fallback_active) == true;
                       - or:
                           - not:
-                              - api.connected:
+                              - mqtt.connected:
                           - not:
                               - wifi.connected:
               then:
                 - switch.turn_on: output_relay
-          - homeassistant.event:
-              event: esphome.button_pressed
-              data:
-                message: up_singleclick
+          - mqtt.publish:
+              topic: esphome/${device_name}/button_pressed
+              payload: "up_singleclick"
       - timing:
           - ON for ${multiclick_min_length} to ${multiclick_max_length}
           - OFF for ${multiclick_min_length} to ${multiclick_max_length}
           - ON for ${multiclick_min_length} to ${multiclick_max_length}
           - OFF for at least ${multiclick_max_length}
         then:
-          - homeassistant.event:
-              event: esphome.button_pressed
-              data:
-                message: up_doubleclick
+          - mqtt.publish:
+              topic: esphome/${device_name}/button_pressed
+              payload: "up_doubleclick"
       - timing: 
           - ON for at least ${longpress_min_length}
         then:
-          - homeassistant.event:
-              event: esphome.button_pressed
-              data:
-                message: up_longpress
+          - mqtt.publish:
+              topic: esphome/${device_name}/button_pressed
+              payload: "up_longpress"
       - timing: 
           - ON for at least ${longpress_reboot_length}
         then:
@@ -209,32 +218,29 @@ binary_sensor:
                       - lambda: return id(relay_local_control_fallback_active) == true;
                       - or:
                           - not:
-                              - api.connected:
+                              - mqtt.connected:
                           - not:
                               - wifi.connected:
               then:
                 - switch.turn_off: output_relay
-          - homeassistant.event:
-              event: esphome.button_pressed
-              data:
-                message: down_singleclick
+          - mqtt.publish:
+              topic: esphome/${device_name}/button_pressed
+              payload: "down_singleclick"
       - timing:
           - ON for ${multiclick_min_length} to ${multiclick_max_length}
           - OFF for ${multiclick_min_length} to ${multiclick_max_length}
           - ON for ${multiclick_min_length} to ${multiclick_max_length}
           - OFF for at least ${multiclick_max_length}
         then:
-          - homeassistant.event:
-              event: esphome.button_pressed
-              data:
-                message: down_doubleclick
+          - mqtt.publish:
+              topic: esphome/${device_name}/button_pressed
+              payload: "down_doubleclick"
       - timing: 
           - ON for at least ${longpress_min_length}
         then:
-          - homeassistant.event:
-              event: esphome.button_pressed
-              data:
-                message: down_longpress
+          - mqtt.publish:
+              topic: esphome/${device_name}/button_pressed
+              payload: "down_longpress"
       - timing: 
           - ON for at least ${longpress_reboot_length}
         then:
@@ -258,7 +264,7 @@ switch:
         - if:
             condition:
               - number.in_range:
-                    id: indication_brightness
+                    id: indicator_brightness
                     above: 1.0
             then:
               - light.turn_on: led_light
@@ -335,7 +341,7 @@ number:
   # Templated brightness slider to configure white LED's brightness without toggling it ON or OFF
   - platform: template
     name: "Indicator Brightness"
-    id: indication_brightness
+    id: indicator_brightness
     entity_category: config
     min_value: 0
     max_value: 100
@@ -356,7 +362,7 @@ number:
               and:
                 - switch.is_off: output_relay
                 - number.in_range:
-                    id: indication_brightness
+                    id: indicator_brightness
                     above: 0.01
             then:
               - light.control:
