@@ -48,11 +48,11 @@ Example of a device YAML file:
 substitutions:
   device_name: "my-spn10-switch"
   device_friendly_name: "Switch"
-  api_key: "supersecretapikey"
-  ota_password: "otapsswd"
-  hotspot_name: "SPN10-switch-AP"
   hotspot_password: !secret fallback_hotspot_password
-  log_level: "INFO" # Optional, default value is "INFO"
+  mqtt_broker_ip: "192.168.0.1"
+  mqtt_broker_port: "1883"
+  mqtt_username: "esphome"
+  mqtt_password: "esphome"
   indicator_brightness_when_offline_percent: '100' # Optional, default value is "100"
   multiclick_min_length: "40ms" # Optional, default value is "40ms". Should be above 30ms
   multiclick_max_length: "350ms" # Optional, default value is "350ms"
@@ -61,6 +61,12 @@ substitutions:
   # You should set to false if not needed as the device will momentarily de-energize the relay on reboots (hardware limitation)
   # If set to true, on reboot, relay will momentarily turn off then will turn back on again.
   default_relay_on_boot_is_active: "false"  # Optional, default value is "false"
+  default_log_level: "INFO" # Optional, default to INFO
+  toggle_log_level_timeout_hours: "24"  # Optional, default to INFO
+  syslog_server_ip: "192.168.0.1"
+  syslog_server_port: "514"  # Optional, default to INFO
+  syslog_log_level: "INFO"  # Optional, default to INFO
+  syslog_time_esphome_id: "id_time_esphome_component"
 
 packages:
   remote_package_files:
