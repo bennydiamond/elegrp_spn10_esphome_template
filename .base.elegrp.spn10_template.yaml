@@ -24,7 +24,7 @@ esphome:
   friendly_name: ${device_friendly_name}
   project:
     name: elegrp.spn10_template
-    version: "1.3mqtt"
+    version: "1.4mqtt"
   platformio_options:
     build_flags:
       - -DLWIP_DHCP_DOES_ACD_CHECK=0 # fix for https://github.com/libretiny-eu/libretiny/issues/316
@@ -152,6 +152,10 @@ button:
     name: "Device Restart (Safe Mode)"
 
 binary_sensor:
+  - platform: status
+    name: "Status"
+    id: id_bin_status
+    
   - platform: gpio
     name: "Button Up"
     id: button_up
@@ -408,4 +412,5 @@ number:
               - light.control:
                   id: led_light
                   state: OFF
+
 
